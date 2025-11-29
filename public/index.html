@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Metadata GEN – Shahadat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800">
+  <!-- Top Nav -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded bg-slate-900 flex items-center justify-center text-white font-bold text-sm">
+          MG
+        </div>
+        <div class="font-semibold text-slate-900">Metadata GEN</div>
+      </div>
+      <nav class="hidden sm:flex gap-6 text-sm text-slate-600">
+        <a href="#" class="hover:text-slate-900">Home</a>
+        <a href="#" class="hover:text-slate-900">About Dev</a>
+        <a href="#" class="hover:text-slate-900">Contact</a>
+      </nav>
+      <button id="logoutBtn" class="text-xs sm:text-sm px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50">
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+    <!-- Free badge -->
+    <div class="flex justify-center mb-4">
+      <span class="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-4 py-1.5 rounded-full">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        Free Forever – Login Required
+      </span>
+    </div>
+
+    <!-- Title -->
+    <section class="text-center mb-8">
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
+        AI Powered <span class="text-sky-600">Metadata</span> Generator
+      </h1>
+      <p class="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
+        Boost your stock photo visibility with AI generated, SEO optimized titles, descriptions and keywords. Fast, free and forever.
+      </p>
+    </section>
+
+    <!-- LOGIN SCREEN -->
+    <section id="loginSection" class="max-w-md mx-auto bg-white shadow rounded-lg p-6 mb-8">
+      <h2 class="text-lg font-semibold mb-4 text-slate-900 text-center">Login to Continue</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+          <input id="loginEmail" type="email" class="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" placeholder="user@example.com" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Password</label>
+          <input id="loginPassword" type="password" class="w-full border rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500" placeholder="123456" />
+        </div>
+        <button id="loginBtn" class="w-full bg-sky-600 text-white text-sm font-medium py-2 rounded hover:bg-sky-700">
+          Login
+        </button>
+        <p class="text-[11px] text-slate-500 text-center">
+          Demo user: <code>user@example.com</code> / <code>123456</code>
+        </p>
+        <p id="loginError" class="text-xs text-red-500 text-center hidden"></p>
+      </div>
+    </section>
+
+    <!-- APP SCREEN (hidden until login) -->
+    <section id="appSection" class="hidden">
+      <div class="grid md:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-6">
+        <!-- Left main -->
+        <div class="space-y-4">
+          <!-- API key / Model box -->
+          <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-semibold text-slate-900 text-sm">API Key &amp; Model Settings</h2>
+              <span class="text-[11px] text-slate-500">Beta v0.1</span>
+            </div>
+            <div class="border border-dashed border-slate-300 rounded-lg p-4 text-center text-sm text-slate-500">
+              <p class="mb-2"><span class="font-semibold text-red-500">No AI Key Needed</span> – demo runs are local.</p>
+              <p class="text-xs">When you deploy, connect your own AI provider in the backend.</p>
+            </div>
+          </div>
+
+          <!-- Upload box -->
+          <div class="bg-white rounded-lg shadow p-4">
+            <div class="grid md:grid-cols-2 gap-4">
+              <!-- Dropzone -->
+              <div class="border border-dashed border-slate-300 rounded-lg p-4 flex flex-col items-center justify-center text-sm text-slate-500">
+                <p class="mb-2 font-medium text-slate-700">Drop or Choose Files</p>
+                <input id="fileInput" type="file" multiple class="hidden" />
+                <button id="chooseFilesBtn" class="px-3 py-1.5 text-xs rounded-md border border-sky-500 text-sky-600 hover:bg-sky-50">
+                  Choose Files
+                </button>
+                <p class="mt-3 text-[11px] text-slate-400">Images only · JPG, PNG, TIFF, BMP</p>
+              </div>
+
+              <!-- Uploaded list -->
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <p class="text-xs font-semibold text-slate-700">
+                    Uploaded Files <span id="fileCount" class="text-slate-400">(0)</span>
+                  </p>
+                  <button id="clearFilesBtn" class="text-[11px] text-slate-500 hover:text-red-500">
+                    Clear All
+                  </button>
+                </div>
+                <div id="fileList" class="border border-slate-200 rounded p-2 h-32 overflow-auto text-[11px] text-slate-600">
+                  No files uploaded yet
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Essential settings -->
+          <div class="bg-white rounded-lg shadow p-4 space-y-4">
+            <h3 class="font-semibold text-slate-900 text-sm mb-1">Essential Settings</h3>
+
+            <!-- Title length -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span>Title Length</span>
+                <span><span id="titleLenValue">150</span> chars</span>
+              </div>
+              <input id="titleLength" type="range" min="40" max="150" value="150" class="w-full" />
+            </div>
+
+            <!-- Keyword count -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span>Keywords Count</span>
+                <span><span id="kwCountValue">45</span> keywords</span>
+              </div>
+              <input id="keywordCount" type="range" min="10" max="60" value="45" class="w-full" />
+            </div>
+
+            <!-- Description length -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span>Description Length</span>
+                <span><span id="descLenValue">150</span> chars</span>
+              </div>
+              <input id="descLength" type="range" min="60" max="300" value="150" class="w-full" />
+            </div>
+
+            <!-- Keyword format + include/exclude -->
+            <div class="grid md:grid-cols-2 gap-4 mt-2">
+              <div>
+                <p class="text-xs font-medium text-slate-600 mb-1">Keyword Format</p>
+                <div class="inline-flex text-[11px] bg-slate-100 rounded-full p-1">
+                  <button data-kfmt="single" class="kfmt-btn px-3 py-1 rounded-full bg-white shadow text-slate-800">Single</button>
+                  <button data-kfmt="double" class="kfmt-btn px-3 py-1 rounded-full text-slate-600">Double</button>
+                  <button data-kfmt="auto" class="kfmt-btn px-3 py-1 rounded-full text-slate-600">Auto</button>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-slate-600 mb-1">Export Profile</p>
+                <select id="exportProfile" class="w-full text-xs border rounded px-2 py-1.5">
+                  <option value="general">General / All</option>
+                  <option value="adobe">Adobe Stock</option>
+                  <option value="shutter">Shutterstock</option>
+                  <option value="freepik">Freepik</option>
+                  <option value="pond5">Pond5</option>
+                  <option value="istock">iStock</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Include Keywords</label>
+                <input id="includeKeywords" type="text" class="w-full border rounded px-2 py-1.5 text-xs" placeholder="technology, innovation, AI" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">Exclude Keywords</label>
+                <input id="excludeKeywords" type="text" class="w-full border rounded px-2 py-1.5 text-xs" placeholder="spam, clickbait, generic" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Generate button -->
+          <div class="mt-4">
+            <button id="generateBtn" class="w-full bg-sky-600 text-white py-3 rounded-lg font-semibold text-sm hover:bg-sky-700 disabled:bg-slate-400">
+              Generate Metadata
+            </button>
+            <p id="generateError" class="text-xs text-red-500 mt-2 hidden"></p>
+          </div>
+        </div>
+
+        <!-- Right side -->
+        <div class="space-y-4">
+          <!-- Export options -->
+          <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="font-semibold text-slate-900 text-sm mb-3">Export Options</h3>
+            <p class="text-[11px] text-slate-500 mb-3">Choose marketplaces to export your metadata.</p>
+            <div class="grid grid-cols-3 gap-2 text-[11px]">
+              <div class="border rounded-md px-2 py-2 text-center">Adobe Stock</div>
+              <div class="border rounded-md px-2 py-2 text-center">Shutterstock</div>
+              <div class="border rounded-md px-2 py-2 text-center">Freepik</div>
+              <div class="border rounded-md px-2 py-2 text-center">Pond5</div>
+              <div class="border rounded-md px-2 py-2 text-center">iStock</div>
+              <div class="border rounded-md px-2 py-2 text-center">General</div>
+            </div>
+            <button id="exportCsvBtn" class="mt-4 w-full border border-slate-300 text-sm py-2 rounded hover:bg-slate-50">
+              Export to CSV
+            </button>
+          </div>
+
+          <!-- Result preview -->
+          <div class="bg-white rounded-lg shadow p-4 h-[340px] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold text-slate-900 text-sm">Preview</h3>
+              <span id="resultCount" class="text-[11px] text-slate-500">0 items</span>
+            </div>
+            <div id="resultList" class="flex-1 overflow-auto text-[11px] text-slate-700 space-y-2">
+              <p class="text-slate-400">No metadata generated yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SCRIPT -->
+  <script>
+    const API_BASE = '';
+
+    let authToken = null;
+    let keywordFormat = 'single';
+    let generatedItems = [];
+    let chosenFiles = [];
+
+    function setLoggedIn(token) {
+      authToken = token;
+      localStorage.setItem('meta_token', token);
+      document.getElementById('loginSection').classList.add('hidden');
+      document.getElementById('appSection').classList.remove('hidden');
+    }
+
+    function setLoggedOut() {
+      authToken = null;
+      localStorage.removeItem('meta_token');
+      document.getElementById('loginSection').classList.remove('hidden');
+      document.getElementById('appSection').classList.add('hidden');
+    }
+
+    function renderFileList() {
+      const fileListEl = document.getElementById('fileList');
+      const fileCountEl = document.getElementById('fileCount');
+      fileCountEl.textContent = `(${chosenFiles.length})`;
+      fileListEl.innerHTML = '';
+      if (!chosenFiles.length) {
+        fileListEl.textContent = 'No files uploaded yet';
+        return;
+      }
+      chosenFiles.forEach(f => {
+        const p = document.createElement('p');
+        p.textContent = f.name;
+        fileListEl.appendChild(p);
+      });
+    }
+
+    function renderResults() {
+      const resultList = document.getElementById('resultList');
+      const resultCount = document.getElementById('resultCount');
+      resultList.innerHTML = '';
+      if (!generatedItems.length) {
+        resultList.innerHTML = '<p class="text-slate-400">No metadata generated yet.</p>';
+        resultCount.textContent = '0 items';
+        return;
+      }
+      resultCount.textContent = generatedItems.length + ' items';
+
+      generatedItems.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'border border-slate-200 rounded p-2';
+        div.innerHTML = `
+          <p class="font-semibold text-[11px] text-slate-900">${item.filename}</p>
+          <p class="text-[11px] mt-1"><span class="font-semibold">Title:</span> ${item.title}</p>
+          <p class="text-[11px] mt-1"><span class="font-semibold">Description:</span> ${item.description}</p>
+          <p class="text-[11px] mt-1"><span class="font-semibold">Keywords:</span> ${item.keywords.join(', ')}</p>
+        `;
+        resultList.appendChild(div);
+      });
+    }
+
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('meta_token');
+      if (saved) setLoggedIn(saved); else setLoggedOut();
+
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const loginError = document.getElementById('loginError');
+
+      loginBtn.addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        loginError.classList.add('hidden');
+        loginError.textContent = '';
+
+        if (!email || !password) {
+          loginError.textContent = 'Email এবং password দিন।';
+          loginError.classList.remove('hidden');
+          return;
+        }
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+
+        try {
+          const res = await fetch(API_BASE + '/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            loginError.textContent = data.error || 'Login failed';
+            loginError.classList.remove('hidden');
+            return;
+          }
+          setLoggedIn(data.token);
+        } catch (e) {
+          loginError.textContent = 'Network error: ' + e.message;
+          loginError.classList.remove('hidden');
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Login';
+        }
+      });
+
+      logoutBtn.addEventListener('click', () => {
+        setLoggedOut();
+      });
+
+      // sliders
+      const titleLenInput = document.getElementById('titleLength');
+      const titleLenValue = document.getElementById('titleLenValue');
+      titleLenInput.addEventListener('input', () => {
+        titleLenValue.textContent = titleLenInput.value;
+      });
+
+      const kwCountInput = document.getElementById('keywordCount');
+      const kwCountValue = document.getElementById('kwCountValue');
+      kwCountInput.addEventListener('input', () => {
+        kwCountValue.textContent = kwCountInput.value;
+      });
+
+      const descLenInput = document.getElementById('descLength');
+      const descLenValue = document.getElementById('descLenValue');
+      descLenInput.addEventListener('input', () => {
+        descLenValue.textContent = descLenInput.value;
+      });
+
+      // keyword format
+      const kfmtButtons = document.querySelectorAll('.kfmt-btn');
+      kfmtButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          kfmtButtons.forEach(b => b.classList.remove('bg-white', 'shadow', 'text-slate-800'));
+          kfmtButtons.forEach(b => b.classList.add('text-slate-600'));
+          btn.classList.add('bg-white', 'shadow', 'text-slate-800');
+          keywordFormat = btn.dataset.kfmt;
+        });
+      });
+
+      // file handling
+      const fileInput = document.getElementById('fileInput');
+      const chooseFilesBtn = document.getElementById('chooseFilesBtn');
+      const clearFilesBtn = document.getElementById('clearFilesBtn');
+
+      chooseFilesBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        chosenFiles = Array.from(fileInput.files || []);
+        renderFileList();
+      });
+      clearFilesBtn.addEventListener('click', () => {
+        chosenFiles = [];
+        fileInput.value = '';
+        renderFileList();
+      });
+
+      // generate
+      const generateBtn = document.getElementById('generateBtn');
+      const generateError = document.getElementById('generateError');
+      const exportProfile = document.getElementById('exportProfile');
+
+      generateBtn.addEventListener('click', async () => {
+        generateError.classList.add('hidden');
+        generateError.textContent = '';
+
+        if (!authToken) {
+          generateError.textContent = 'Please login first.';
+          generateError.classList.remove('hidden');
+          return;
+        }
+        if (!chosenFiles.length) {
+          generateError.textContent = 'Please choose at least one image.';
+          generateError.classList.remove('hidden');
+          return;
+        }
+
+        const filenames = chosenFiles.map(f => f.name);
+        const body = {
+          filenames,
+          titleLength: Number(titleLenInput.value),
+          descLength: Number(descLenInput.value),
+          keywordCount: Number(kwCountInput.value),
+          keywordFormat,
+          includeKeywords: document.getElementById('includeKeywords').value,
+          excludeKeywords: document.getElementById('excludeKeywords').value,
+          exportProfile: exportProfile.value,
+        };
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
+
+        try {
+          const res = await fetch(API_BASE + '/api/generate-metadata', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + authToken,
+            },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            generateError.textContent = data.error || 'Generation failed';
+            generateError.classList.remove('hidden');
+            return;
+          }
+          generatedItems = data.items || [];
+          renderResults();
+        } catch (e) {
+          generateError.textContent = 'Network error: ' + e.message;
+          generateError.classList.remove('hidden');
+        } finally {
+          generateBtn.disabled = false;
+          generateBtn.textContent = 'Generate Metadata';
+        }
+      });
+
+      // export csv
+      document.getElementById('exportCsvBtn').addEventListener('click', () => {
+        if (!generatedItems.length) return;
+        let csv = 'filename,title,description,keywords\n';
+        generatedItems.forEach(item => {
+          const row = [
+            `"${item.filename.replace(/"/g, '""')}"`,
+            `"${item.title.replace(/"/g, '""')}"`,
+            `"${item.description.replace(/"/g, '""')}"`,
+            `"${item.keywords.join('; ').replace(/"/g, '""')}"`,
+          ].join(',');
+          csv += row + '\n';
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'metadata_export.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    });
+  </script>
+</body>
+</html>
