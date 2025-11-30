@@ -18,17 +18,29 @@ const JWT_SECRET = process.env.JWT_SECRET || 'local_demo_secret';
 
 // ----- Gemini setup -----
 let geminiModel = null;
+let geminiInfo = { active: false, model: null, source: null };
+
+function initGemini(apiKey, modelName = 'gemini-1.5-pro', source = 'manual') {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: modelName });
+  geminiModel = model;
+  geminiInfo = { active: true, model: modelName, source };
+  console.log(`✅ Gemini model ready (${source}):`, modelName);
+}
+
+// প্রথমে যদি .env থেকে Key থাকে
 if (process.env.GEMINI_API_KEY) {
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
-    geminiModel = genAI.getGenerativeModel({ model: modelName });
-    console.log('✅ Gemini model ready:', modelName);
+    initGemini(
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+      'env'
+    );
   } catch (err) {
-    console.error('Gemini init error:', err.message);
+    console.error('Gemini init error (env):', err.message);
   }
 } else {
-  console.log('⚠️ GEMINI_API_KEY not set, using local demo generator.');
+  console.log('⚠️ GEMINI_API_KEY not set, waiting for manual config.');
 }
 
 // demo login: user@example.com / 123456
@@ -59,6 +71,32 @@ function auth(req, res, next) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+// ---- Gemini status & config routes ----
+
+// বর্তমান Gemini অবস্থাটা ফ্রন্টএন্ডে দেখানোর জন্য
+app.get('/api/gemini-status', auth, (req, res) => {
+  res.json(geminiInfo);
+});
+
+// UI থেকে API key + model সেট করার জন্য
+app.post('/api/gemini-config', auth, (req, res) => {
+  const { apiKey, model } = req.body || {};
+
+  if (!apiKey || typeof apiKey !== 'string') {
+    return res.status(400).json({ error: 'apiKey is required' });
+  }
+
+  const modelName = model && model.trim() ? model.trim() : 'gemini-1.5-pro';
+
+  try {
+    initGemini(apiKey.trim(), modelName, 'manual');
+    return res.json({ ok: true, ...geminiInfo });
+  } catch (err) {
+    console.error('Gemini config error:', err.message);
+    return res.status(400).json({ error: 'Failed to init Gemini: ' + err.message });
+  }
+});
 
 // ---------- Local (non-AI) metadata generator ----------
 function generateLocalMetadata({
@@ -226,7 +264,7 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
         excludeKeywords,
         exportProfile,
       });
-      return res.json({ items, ai: 'gemini' });
+      return res.json({ items, ai: 'gemini', gemini: geminiInfo });
     } else {
       // Fallback: local
       items = generateLocalMetadata({
