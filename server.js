@@ -1,54 +1,51 @@
-// server.js (fixed version)
+// server.js
 require('dotenv').config();
-const express = require('express');
-const jwt = require('jsonwebtoken');
-const bodyParser = require('body-parser');
 const path = require('path');
+const express = require('express');
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken');
 
 const app = express();
-const PORT = process.env.PORT || 4000;
-const JWT_SECRET = process.env.JWT_SECRET || 'change_this_secret';
 
-// Demo user
-const USER = {
-  email: 'user@example.com',
-  password: '123456',
-};
-
+// ----- Basic middleware -----
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-// -------- Auth middleware --------
-function authRequired(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+// ----- Auth / JWT setup -----
+const JWT_SECRET = process.env.JWT_SECRET || 'local_demo_secret';
+
+// demo login: user@example.com / 123456
+app.post('/api/login', (req, res) => {
+  const { email, password } = req.body || {};
+
+  if (email === 'user@example.com' && password === '123456') {
+    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '2h' });
+    return res.json({ token });
+  }
+
+  return res.status(401).json({ error: 'Invalid credentials' });
+});
+
+// simple auth middleware
+function auth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const [, token] = header.split(' ');
+
+  if (!token) {
+    return res.status(401).json({ error: 'Missing token' });
+  }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.user = payload;
+    jwt.verify(token, JWT_SECRET);
     next();
-  } catch (e) {
+  } catch (err) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
 
-// -------- Routes --------
-
-// Login
-app.post('/api/login', (req, res) => {
-  const { email, password } = req.body || {};
-  if (email === USER.email && password === USER.password) {
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '7d' });
-    return res.json({ token });
-  }
-  return res.status(401).json({ error: 'Invalid credentials' });
-});
-
-// Metadata generator (demo)
-app.post('/api/generate-metadata', authRequired, (req, res) => {
+// ----- Metadata generate API (demo) -----
+app.post('/api/generate-metadata', auth, (req, res) => {
   const {
     filenames = [],
     titleLength = 150,
@@ -60,53 +57,76 @@ app.post('/api/generate-metadata', authRequired, (req, res) => {
     exportProfile = 'general',
   } = req.body || {};
 
-  if (!Array.isArray(filenames) || filenames.length === 0) {
-    return res.status(400).json({ error: 'No files supplied' });
-  }
+  const includeList = includeKeywords
+    ? includeKeywords.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+  const excludeList = excludeKeywords
+    ? excludeKeywords.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
 
-  const items = filenames.map((name) => {
+  const items = filenames.map((name, index) => {
     const baseName = name.replace(/\.[^.]+$/, '');
-    const title = `${baseName} – high quality stock image, ${exportProfile}`;
-    const description = `High quality stock image titled "${baseName}". Optimized for ${exportProfile} marketplaces. Includes ${includeKeywords || 'relevant'} concepts.`;
-    const keywords = [];
+    const title = `${baseName} – AI stock image #${index + 1}`.slice(0, titleLength);
 
-    const baseWords = (includeKeywords || 'photo, image, stock, creative')
-      .split(',')
-      .map(k => k.trim())
-      .filter(Boolean);
+    const description = (
+      `High quality stock photo titled "${baseName}". ` +
+      `Optimised for ${exportProfile} with AI generated SEO description.`
+    ).slice(0, descLength);
 
-    while (keywords.length < keywordCount && keywords.length < 60) {
-      baseWords.forEach(w => {
-        if (keywords.length < keywordCount) keywords.push(w);
-      });
-      if (baseWords.length === 0) break;
+    const baseKeywords = [
+      'stock photo',
+      'high quality',
+      'digital download',
+      'royalty free',
+      'creative',
+      'background',
+      'texture',
+      'minimal',
+      'design',
+      'concept',
+      'modern',
+      'graphic',
+      'art',
+    ];
+
+    let keywords = [...includeList, ...baseKeywords];
+
+    if (keywordFormat === 'double') {
+      keywords = keywords.map(k => k + ' background');
+    } else if (keywordFormat === 'auto') {
+      keywords = keywords.map((k, i) =>
+        i % 2 === 0 ? k : k + ' background'
+      );
     }
 
-    const excluded = (excludeKeywords || '').split(',').map(k => k.trim());
-    const filteredKeywords = keywords.filter(k => !excluded.includes(k));
+    if (excludeList.length) {
+      const excludeSet = new Set(excludeList.map(s => s.toLowerCase()));
+      keywords = keywords.filter(k => !excludeSet.has(k.toLowerCase()));
+    }
+
+    keywords = Array.from(new Set(keywords)).slice(0, keywordCount);
 
     return {
       filename: name,
-      title: title.slice(0, titleLength),
-      description: description.slice(0, descLength),
-      keywords: filteredKeywords,
+      title,
+      description,
+      keywords,
     };
   });
 
   return res.json({ items });
 });
 
-// ---------- Serve frontend ----------
-// শুধু "/" path এ index.html সার্ভ করব (এতেই problem মিটে যাবে)
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// ----- Static frontend -----
+const publicDir = path.join(__dirname, 'public');
+app.use(express.static(publicDir));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-// Optional: unknown path হলে simple text
-app.use((req, res) => {
-  res.status(404).send('Not found');
-});
-
+// ----- Start server -----
+const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
