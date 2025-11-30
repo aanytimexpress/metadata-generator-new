@@ -111,7 +111,9 @@ function generateLocalMetadata({
     if (keywordFormat === 'double') {
       keywords = keywords.map(k => k + ' background');
     } else if (keywordFormat === 'auto') {
-      keywords = keywords.map((k, i) => (i % 2 === 0 ? k : k + ' background'));
+      keywords = keywords.map((k, i) =>
+        i % 2 === 0 ? k : k + ' background'
+      );
     }
 
     if (excludeList.length) {
@@ -187,7 +189,10 @@ Rules:
   let text = result.response.text().trim();
 
   // clean possible ```json fences
-  text = text.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+  text = text.replace(/^```json/i, '')
+             .replace(/^```/, '')
+             .replace(/```$/, '')
+             .trim();
 
   const items = JSON.parse(text);
   return items;
@@ -261,8 +266,8 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// Express v5 এর জন্য wildcard এভাবেই ব্যবহার করো
-app.get('/*', (req, res) => {
+// শুধু root path এ index.html পাঠাচ্ছি
+app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
