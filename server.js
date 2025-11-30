@@ -16,38 +16,7 @@ app.use(bodyParser.json());
 // ----- Auth / JWT setup -----
 const JWT_SECRET = process.env.JWT_SECRET || 'local_demo_secret';
 
-// ----- Gemini global config -----
-let geminiConfig = {
-  apiKey: process.env.GEMINI_API_KEY || null,
-  model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
-  source: process.env.GEMINI_API_KEY ? 'env' : null,
-};
-
-let geminiModel = null;
-
-function initGemini() {
-  if (!geminiConfig.apiKey) {
-    geminiModel = null;
-    console.log('⚠️  Gemini disabled (no API key).');
-    return;
-  }
-
-  try {
-    const genAI = new GoogleGenerativeAI(geminiConfig.apiKey);
-    geminiModel = genAI.getGenerativeModel({ model: geminiConfig.model });
-    console.log(
-      `✅ Gemini ready – model: ${geminiConfig.model}, source: ${geminiConfig.source}`
-    );
-  } catch (err) {
-    geminiModel = null;
-    console.error('❌ Gemini init error:', err.message);
-  }
-}
-
-// initial load
-initGemini();
-
-// ----- Demo login: user@example.com / 123456 -----
+// demo login: user@example.com / 123456
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body || {};
 
@@ -59,7 +28,7 @@ app.post('/api/login', (req, res) => {
   return res.status(401).json({ error: 'Invalid credentials' });
 });
 
-// ----- simple auth middleware -----
+// simple auth middleware
 function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const [, token] = header.split(' ');
@@ -75,6 +44,98 @@ function auth(req, res, next) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+// ----- Gemini setup -----
+let geminiModel = null;
+let geminiSource = 'local';
+let geminiModelName = null;
+
+// manual config (from API)
+let manualGeminiConfig = {
+  apiKey: null,
+  model: null,
+};
+
+function initGeminiFromEnv() {
+  const key = process.env.GEMINI_API_KEY;
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
+
+  if (!key) {
+    console.log('⚠️  Gemini disabled (no API key in env).');
+    return;
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(key);
+    geminiModel = genAI.getGenerativeModel({ model: modelName });
+    geminiSource = 'env';
+    geminiModelName = modelName;
+    console.log(`✅ Gemini ready – model: ${modelName}, source: env`);
+  } catch (err) {
+    geminiModel = null;
+    console.error('Gemini init from env failed:', err.message);
+  }
+}
+
+// প্রথমে env থেকে চেষ্টা করি
+initGeminiFromEnv();
+
+// status check
+app.get('/api/gemini-status', auth, (req, res) => {
+  if (!geminiModel) {
+    return res.json({
+      active: false,
+      source: geminiSource,
+      model: geminiModelName,
+    });
+  }
+
+  return res.json({
+    active: true,
+    source: geminiSource,
+    model: geminiModelName,
+  });
+});
+
+// manual config API
+app.post('/api/gemini-config', auth, async (req, res) => {
+  const { apiKey, model } = req.body || {};
+
+  if (!apiKey) {
+    return res.status(400).json({ error: 'apiKey is required' });
+  }
+
+  const modelName = model || 'gemini-1.5-pro';
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const modelInstance = genAI.getGenerativeModel({ model: modelName });
+
+    // simple test-call (optional – চাইলে skip করতে পারো)
+    // শুধু নিশ্চিত হওয়ার জন্য ১টা টেস্ট prompt
+    await modelInstance.generateContent('test');
+
+    manualGeminiConfig = { apiKey, model: modelName };
+    geminiModel = modelInstance;
+    geminiSource = 'manual';
+    geminiModelName = modelName;
+
+    console.log(
+      `✅ Gemini ready – model: ${modelName}, source: manual (user config)`
+    );
+
+    return res.json({
+      ok: true,
+      source: geminiSource,
+      model: geminiModelName,
+    });
+  } catch (err) {
+    console.error('Gemini manual config failed:', err.message);
+    return res
+      .status(400)
+      .json({ error: 'Failed to initialise Gemini with this key.' });
+  }
+});
 
 // ---------- Local (non-AI) metadata generator ----------
 function generateLocalMetadata({
@@ -112,14 +173,26 @@ function generateLocalMetadata({
 
   return filenames.map((name, index) => {
     const baseName = name.replace(/\.[^.]+$/, '');
-    const title = `${baseName} – AI stock image #${index + 1}`.slice(
-      0,
-      titleLength
-    );
+    const profileLabel =
+      exportProfile === 'adobe'
+        ? 'Adobe Stock'
+        : exportProfile === 'shutter'
+        ? 'Shutterstock'
+        : exportProfile === 'freepik'
+        ? 'Freepik'
+        : exportProfile === 'pond5'
+        ? 'Pond5'
+        : exportProfile === 'istock'
+        ? 'iStock'
+        : 'general stock';
+
+    const title = (
+      `${baseName} – AI stock image for ${profileLabel} #${index + 1}`
+    ).slice(0, titleLength);
 
     const description = (
       `High quality stock photo titled "${baseName}". ` +
-      `Optimised for ${exportProfile} with AI style metadata.`
+      `Optimised for ${profileLabel} marketplace with SEO friendly, clean description and commercial safe wording.`
     ).slice(0, descLength);
 
     let keywords = [...includeList, ...baseKeywords];
@@ -161,6 +234,19 @@ async function generateGeminiMetadata({
     throw new Error('Gemini model not initialised');
   }
 
+  const profileLabel =
+    exportProfile === 'adobe'
+      ? 'Adobe Stock'
+      : exportProfile === 'shutter'
+      ? 'Shutterstock'
+      : exportProfile === 'freepik'
+      ? 'Freepik'
+      : exportProfile === 'pond5'
+      ? 'Pond5'
+      : exportProfile === 'istock'
+      ? 'iStock'
+      : 'general stock marketplaces';
+
   const payload = {
     filenames,
     settings: {
@@ -175,34 +261,45 @@ async function generateGeminiMetadata({
   };
 
   const prompt = `
-You are a professional stock photo metadata generator for sites like Adobe Stock, Shutterstock and Freepik.
+You are a professional stock photo metadata generator for sites like Adobe Stock, Shutterstock, Freepik, Pond5 and iStock.
 
-Given this JSON input:
+The user is uploading files with these names and settings (JSON below):
+
 ${JSON.stringify(payload, null, 2)}
 
-Generate SEO-optimised metadata ONLY as strict JSON in this format:
+TASK:
+For EACH filename, generate:
+- A strong, commercial-safe TITLE (max ${titleLength} characters).
+- A clean DESCRIPTION (max ${descLength} characters).
+- An array of up to ${keywordCount} KEYWORDS (no more than ${keywordCount} items).
+
+Follow these rules carefully:
+1. Use the filename as a hint for subject, but do NOT repeat the raw ID (e.g. "142079516") in title or description.
+2. Optimise for ${profileLabel}.
+3. Keywords must be relevant, in English, separated as an array of strings.
+4. Avoid spam words like "best ever", "amazing", "click here".
+5. Respect "includeKeywords" by trying to include them when relevant.
+6. Never include any of the "excludeKeywords".
+7. Keep titles & descriptions suitable for commercial stock licensing and neutral (no trademark names).
+
+RETURN FORMAT (very important):
+Return ONLY strict JSON, no markdown, no explanation:
 
 [
   {
-    "filename": "file-name-1.jpg",
+    "filename": "original-filename-1.jpg",
     "title": "Title within ${titleLength} characters",
     "description": "Description within ${descLength} characters",
     "keywords": ["keyword1", "keyword2", "... up to ${keywordCount} items"]
-  }
+  },
+  ...
 ]
-
-Rules:
-- Return only valid JSON. No markdown, no explanation, no extra text.
-- Keywords must be an array of strings.
-- Respect includeKeywords (try to include).
-- Never include excludeKeywords.
-- Text must be suitable for commercial stock marketplaces.
 `;
 
   const result = await geminiModel.generateContent(prompt);
   let text = result.response.text().trim();
 
-  // clean ``` fences if any
+  // clean possible ``` fences
   text = text
     .replace(/^```json/i, '')
     .replace(/^```/, '')
@@ -210,44 +307,13 @@ Rules:
     .trim();
 
   const items = JSON.parse(text);
+
+  if (!Array.isArray(items)) {
+    throw new Error('Gemini response is not an array');
+  }
+
   return items;
 }
-
-// ----- Gemini status (for UI badge) -----
-app.get('/api/gemini-status', auth, (req, res) => {
-  if (!geminiModel) {
-    return res.json({ active: false });
-  }
-  res.json({
-    active: true,
-    model: geminiConfig.model,
-    source: geminiConfig.source || 'manual',
-  });
-});
-
-// ----- Gemini config (UI থেকে key + model save) -----
-app.post('/api/gemini-config', auth, async (req, res) => {
-  const { apiKey, model } = req.body || {};
-  if (!apiKey) {
-    return res.status(400).json({ error: 'API key is required' });
-  }
-
-  geminiConfig.apiKey = apiKey;
-  geminiConfig.model = model || 'gemini-1.5-pro';
-  geminiConfig.source = 'manual';
-
-  initGemini();
-
-  if (!geminiModel) {
-    return res.status(500).json({ error: 'Failed to initialise Gemini with given key.' });
-  }
-
-  return res.json({
-    active: true,
-    model: geminiConfig.model,
-    source: geminiConfig.source,
-  });
-});
 
 // ----- Metadata generate API -----
 app.post('/api/generate-metadata', auth, async (req, res) => {
@@ -262,24 +328,48 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
     exportProfile = 'general',
   } = req.body || {};
 
+  if (!Array.isArray(filenames) || filenames.length === 0) {
+    return res.status(400).json({ error: 'filenames array is required' });
+  }
+
   try {
     let items;
+    let engine = 'local';
 
     if (geminiModel) {
-      // Try Gemini first
-      items = await generateGeminiMetadata({
-        filenames,
-        titleLength,
-        descLength,
-        keywordCount,
-        keywordFormat,
-        includeKeywords,
-        excludeKeywords,
-        exportProfile,
-      });
-      return res.json({ items, ai: 'gemini' });
+      console.log(
+        `[AI] Using Gemini for ${filenames.length} files (model: ${geminiModelName}, source: ${geminiSource})`
+      );
+      try {
+        items = await generateGeminiMetadata({
+          filenames,
+          titleLength,
+          descLength,
+          keywordCount,
+          keywordFormat,
+          includeKeywords,
+          excludeKeywords,
+          exportProfile,
+        });
+        engine = 'gemini';
+      } catch (err) {
+        console.error('Gemini generation error, falling back:', err.message);
+        items = generateLocalMetadata({
+          filenames,
+          titleLength,
+          descLength,
+          keywordCount,
+          keywordFormat,
+          includeKeywords,
+          excludeKeywords,
+          exportProfile,
+        });
+        engine = 'fallback-local';
+      }
     } else {
-      // Fallback: local
+      console.log(
+        `[AI] Gemini disabled, using local generator for ${filenames.length} files`
+      );
       items = generateLocalMetadata({
         filenames,
         titleLength,
@@ -290,27 +380,15 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
         excludeKeywords,
         exportProfile,
       });
-      return res.json({ items, ai: 'local' });
+      engine = 'local';
     }
-  } catch (err) {
-    console.error('Metadata generation error:', err.message);
 
-    // Fallback to local if AI fails
-    const items = generateLocalMetadata({
-      filenames,
-      titleLength,
-      descLength,
-      keywordCount,
-      keywordFormat,
-      includeKeywords,
-      excludeKeywords,
-      exportProfile,
-    });
-    return res.json({
-      items,
-      ai: 'fallback-local',
-      warning: 'AI failed, fallback to local generator',
-    });
+    return res.json({ items, ai: engine });
+  } catch (err) {
+    console.error('Metadata generation fatal error:', err);
+    return res
+      .status(500)
+      .json({ error: 'Internal error while generating metadata' });
   }
 });
 
@@ -318,8 +396,8 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// Express v5 এ wildcard `*` এর বদলে এই generic handler ব্যবহার করা নিরাপদ
-app.use((req, res) => {
+// Express v5 compatible wildcard
+app.get('/(.*)', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
