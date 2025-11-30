@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OLD UI – Metadata GEN</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.tailwindcss.com" rel="stylesheet">
+</head>
+
+<body class="bg-slate-100 text-slate-800">
+
+<header class="bg-white shadow-sm">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 bg-slate-900 rounded text-white
+             flex items-center justify-center font-bold text-sm">MG</div>
+      <div class="font-semibold text-slate-900">OLD Metadata Panel UI</div>
+    </div>
+    <button onclick="location.href='/'"
+            class="px-3 py-1 border text-xs rounded hover:bg-slate-50">
+      ← Back to New UI
+    </button>
+  </div>
+</header>
+
+
+<!-- ░░ OLD STYLE UI BLOCK ░░ -->
+<div class="max-w-6xl mx-auto mt-6 grid gap-6 md:grid-cols-2">
+
+  <!-- Left Side -->
+  <div class="space-y-4">
+
+    <!-- API / Model -->
+    <div class="bg-white p-4 shadow rounded">
+      <h2 class="font-semibold text-sm mb-1">API Key & Model Settings</h2>
+
+      <p id="status" class="text-xs text-slate-500 mb-2">
+        No Gemini Connected
+      </p>
+
+      <input id="gkey" type="password" placeholder="Enter Gemini API Key"
+             class="border w-full text-xs px-2 py-1.5 rounded mb-2" />
+
+      <input id="gmodel" type="text" value="gemini-1.5-pro"
+             class="border w-full text-xs px-2 py-1.5 rounded mb-2" />
+
+      <button onclick="saveKey()"
+              class="bg-sky-600 text-white text-xs px-3 py-1.5 rounded">
+        Save Settings
+      </button>
+    </div>
+
+
+    <!-- File Upload -->
+    <div class="bg-white p-4 shadow rounded">
+      <h2 class="font-semibold text-sm mb-2">Upload Images</h2>
+
+      <input type="file" multiple id="fileBox" class="mb-2" />
+
+      <button class="w-full py-2 bg-sky-600 text-white text-sm rounded"
+              onclick="runAI()">
+        Generate Metadata
+      </button>
+    </div>
+
+  </div>
+
+
+  <!-- Right Side -->
+  <div class="bg-white p-4 shadow rounded">
+    <h2 class="font-semibold text-sm mb-2">Generated Output</h2>
+    <div id="out" class="text-xs space-y-2 max-h-96 overflow-auto"></div>
+  </div>
+</div>
+
+
+<!-- SCRIPT -->
+<script>
+let KEY = "", MODEL = "gemini-1.5-pro";
+
+function saveKey() {
+  KEY = document.getElementById("gkey").value.trim();
+  MODEL = document.getElementById("gmodel").value.trim();
+  document.getElementById("status").innerHTML =
+    "🔗 Gemini Connected → " + MODEL;
+}
+
+
+async function runAI() {
+  const box = document.getElementById("fileBox");
+  if (!box.files.length) return alert("Select images first!");
+
+  const UL = document.getElementById("out");
+  UL.innerHTML = "⏳ Processing Images...";
+
+  const fd = new FormData();
+  [...box.files].forEach(f => fd.append("files", f));
+
+  const res = await fetch("/api/generate-from-images", {
+    method: "POST",
+    headers: KEY ? { "x-gemini-key": KEY, "x-gemini-model": MODEL } : {},
+    body: fd
+  });
+
+  const data = await res.json();
+  UL.innerHTML = "";
+
+  data.items.forEach(i=>{
+    UL.innerHTML += `
+      <div class="border p-2 rounded">
+        <b>${i.filename}</b><br>
+        Title: ${i.title}<br>
+        Desc: ${i.description}<br>
+        Keywords: ${i.keywords.join(", ")}
+      </div>
+    `;
+  });
+}
+</script>
+
+</body>
+</html>
