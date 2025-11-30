@@ -16,34 +16,38 @@ app.use(bodyParser.json());
 // ----- Auth / JWT setup -----
 const JWT_SECRET = process.env.JWT_SECRET || 'local_demo_secret';
 
-// ----- Gemini setup -----
+// ----- Gemini global config -----
+let geminiConfig = {
+  apiKey: process.env.GEMINI_API_KEY || null,
+  model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+  source: process.env.GEMINI_API_KEY ? 'env' : null,
+};
+
 let geminiModel = null;
-let geminiInfo = { active: false, model: null, source: null };
 
-function initGemini(apiKey, modelName = 'gemini-1.5-pro', source = 'manual') {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
-  geminiModel = model;
-  geminiInfo = { active: true, model: modelName, source };
-  console.log(`✅ Gemini model ready (${source}):`, modelName);
-}
+function initGemini() {
+  if (!geminiConfig.apiKey) {
+    geminiModel = null;
+    console.log('⚠️  Gemini disabled (no API key).');
+    return;
+  }
 
-// প্রথমে যদি .env থেকে Key থাকে
-if (process.env.GEMINI_API_KEY) {
   try {
-    initGemini(
-      process.env.GEMINI_API_KEY,
-      process.env.GEMINI_MODEL || 'gemini-1.5-pro',
-      'env'
+    const genAI = new GoogleGenerativeAI(geminiConfig.apiKey);
+    geminiModel = genAI.getGenerativeModel({ model: geminiConfig.model });
+    console.log(
+      `✅ Gemini ready – model: ${geminiConfig.model}, source: ${geminiConfig.source}`
     );
   } catch (err) {
-    console.error('Gemini init error (env):', err.message);
+    geminiModel = null;
+    console.error('❌ Gemini init error:', err.message);
   }
-} else {
-  console.log('⚠️ GEMINI_API_KEY not set, waiting for manual config.');
 }
 
-// demo login: user@example.com / 123456
+// initial load
+initGemini();
+
+// ----- Demo login: user@example.com / 123456 -----
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body || {};
 
@@ -55,7 +59,7 @@ app.post('/api/login', (req, res) => {
   return res.status(401).json({ error: 'Invalid credentials' });
 });
 
-// simple auth middleware
+// ----- simple auth middleware -----
 function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const [, token] = header.split(' ');
@@ -71,32 +75,6 @@ function auth(req, res, next) {
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
-
-// ---- Gemini status & config routes ----
-
-// বর্তমান Gemini অবস্থাটা ফ্রন্টএন্ডে দেখানোর জন্য
-app.get('/api/gemini-status', auth, (req, res) => {
-  res.json(geminiInfo);
-});
-
-// UI থেকে API key + model সেট করার জন্য
-app.post('/api/gemini-config', auth, (req, res) => {
-  const { apiKey, model } = req.body || {};
-
-  if (!apiKey || typeof apiKey !== 'string') {
-    return res.status(400).json({ error: 'apiKey is required' });
-  }
-
-  const modelName = model && model.trim() ? model.trim() : 'gemini-1.5-pro';
-
-  try {
-    initGemini(apiKey.trim(), modelName, 'manual');
-    return res.json({ ok: true, ...geminiInfo });
-  } catch (err) {
-    console.error('Gemini config error:', err.message);
-    return res.status(400).json({ error: 'Failed to init Gemini: ' + err.message });
-  }
-});
 
 // ---------- Local (non-AI) metadata generator ----------
 function generateLocalMetadata({
@@ -149,9 +127,7 @@ function generateLocalMetadata({
     if (keywordFormat === 'double') {
       keywords = keywords.map(k => k + ' background');
     } else if (keywordFormat === 'auto') {
-      keywords = keywords.map((k, i) =>
-        i % 2 === 0 ? k : k + ' background'
-      );
+      keywords = keywords.map((k, i) => (i % 2 === 0 ? k : k + ' background'));
     }
 
     if (excludeList.length) {
@@ -226,15 +202,52 @@ Rules:
   const result = await geminiModel.generateContent(prompt);
   let text = result.response.text().trim();
 
-  // clean possible ```json fences
-  text = text.replace(/^```json/i, '')
-             .replace(/^```/, '')
-             .replace(/```$/, '')
-             .trim();
+  // clean ``` fences if any
+  text = text
+    .replace(/^```json/i, '')
+    .replace(/^```/, '')
+    .replace(/```$/, '')
+    .trim();
 
   const items = JSON.parse(text);
   return items;
 }
+
+// ----- Gemini status (for UI badge) -----
+app.get('/api/gemini-status', auth, (req, res) => {
+  if (!geminiModel) {
+    return res.json({ active: false });
+  }
+  res.json({
+    active: true,
+    model: geminiConfig.model,
+    source: geminiConfig.source || 'manual',
+  });
+});
+
+// ----- Gemini config (UI থেকে key + model save) -----
+app.post('/api/gemini-config', auth, async (req, res) => {
+  const { apiKey, model } = req.body || {};
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+
+  geminiConfig.apiKey = apiKey;
+  geminiConfig.model = model || 'gemini-1.5-pro';
+  geminiConfig.source = 'manual';
+
+  initGemini();
+
+  if (!geminiModel) {
+    return res.status(500).json({ error: 'Failed to initialise Gemini with given key.' });
+  }
+
+  return res.json({
+    active: true,
+    model: geminiConfig.model,
+    source: geminiConfig.source,
+  });
+});
 
 // ----- Metadata generate API -----
 app.post('/api/generate-metadata', auth, async (req, res) => {
@@ -253,7 +266,7 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
     let items;
 
     if (geminiModel) {
-      // Try Gemini
+      // Try Gemini first
       items = await generateGeminiMetadata({
         filenames,
         titleLength,
@@ -264,7 +277,7 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
         excludeKeywords,
         exportProfile,
       });
-      return res.json({ items, ai: 'gemini', gemini: geminiInfo });
+      return res.json({ items, ai: 'gemini' });
     } else {
       // Fallback: local
       items = generateLocalMetadata({
@@ -281,6 +294,7 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
     }
   } catch (err) {
     console.error('Metadata generation error:', err.message);
+
     // Fallback to local if AI fails
     const items = generateLocalMetadata({
       filenames,
@@ -304,13 +318,13 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// শুধু root path এ index.html পাঠাচ্ছি
-app.get('/', (req, res) => {
+// Express v5 এ wildcard `*` এর বদলে এই generic handler ব্যবহার করা নিরাপদ
+app.use((req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // ----- Start server -----
-const PORT = process.env.PORT || 8080; // Railway সাধারণত 8080 দেয়
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
