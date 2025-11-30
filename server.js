@@ -396,8 +396,8 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// Express v5 compatible wildcard
-app.get('/(.*)', (req, res) => {
+// শুধু root path (/) সার্ভ করবে
+app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
