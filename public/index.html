@@ -80,9 +80,46 @@
               <h2 class="font-semibold text-slate-900 text-sm">API Key &amp; Model Settings</h2>
               <span class="text-[11px] text-slate-500">Beta v0.1</span>
             </div>
-            <div class="border border-dashed border-slate-300 rounded-lg p-4 text-center text-sm text-slate-500">
-              <p class="mb-2"><span class="font-semibold text-red-500">No AI Key Needed</span> – demo runs are local.</p>
-              <p class="text-xs">When you deploy, connect your own AI provider in the backend.</p>
+
+            <div class="border border-dashed border-slate-300 rounded-lg p-4 text-sm text-left text-slate-600 space-y-3">
+              <p id="geminiStatusText" class="text-xs text-slate-500">
+                No AI Key – using local demo generator.
+              </p>
+
+              <div class="grid md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">
+                    Gemini API Key
+                  </label>
+                  <input
+                    id="geminiApiKey"
+                    type="password"
+                    class="w-full border rounded px-2 py-1.5 text-xs"
+                    placeholder="paste your Gemini API key"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">
+                    Model (optional)
+                  </label>
+                  <input
+                    id="geminiModel"
+                    type="text"
+                    class="w-full border rounded px-2 py-1.5 text-xs"
+                    placeholder="gemini-1.5-pro"
+                  />
+                </div>
+              </div>
+
+              <button
+                id="saveGeminiBtn"
+                class="mt-1 inline-flex items-center justify-center px-3 py-1.5 text-xs rounded-md bg-sky-600 text-white hover:bg-sky-700"
+              >
+                Save Gemini Settings
+              </button>
+              <p class="text-[10px] text-slate-400">
+                Your key is stored only on this server instance and used to call Gemini. Change / remove anytime.
+              </p>
             </div>
           </div>
 
@@ -234,11 +271,113 @@
     let generatedItems = [];
     let chosenFiles = [];
 
+    // ---- helper for auth headers ----
+    function getAuthHeaders() {
+      return authToken
+        ? { 'Authorization': 'Bearer ' + authToken }
+        : {};
+    }
+
+    // ---- Gemini status load ----
+    async function loadGeminiStatus() {
+      const statusEl = document.getElementById('geminiStatusText');
+      if (!statusEl || !authToken) return;
+
+      statusEl.textContent = 'Checking Gemini status...';
+
+      try {
+        const res = await fetch(API_BASE + '/api/gemini-status', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        });
+
+        if (!res.ok) {
+          statusEl.textContent = 'Not connected – using local demo generator.';
+          return;
+        }
+
+        const data = await res.json();
+        if (data.active) {
+          statusEl.textContent =
+            'Connected to Gemini (' +
+            (data.model || 'unknown model') +
+            ', source: ' +
+            (data.source || 'manual') +
+            ').';
+        } else {
+          statusEl.textContent =
+            'Not connected – using local demo generator.';
+        }
+      } catch (e) {
+        console.error(e);
+        statusEl.textContent = 'Error checking Gemini status.';
+      }
+    }
+
+    // ---- Gemini config save ----
+    async function saveGeminiConfig() {
+      const apiKeyInput = document.getElementById('geminiApiKey');
+      const modelInput = document.getElementById('geminiModel');
+      const statusEl = document.getElementById('geminiStatusText');
+
+      const apiKey = apiKeyInput.value.trim();
+      const model = modelInput.value.trim();
+
+      if (!authToken) {
+        alert('Please login first.');
+        return;
+      }
+
+      if (!apiKey) {
+        alert('Please paste your Gemini API key.');
+        return;
+      }
+
+      statusEl.textContent = 'Saving Gemini settings...';
+
+      try {
+        const res = await fetch(API_BASE + '/api/gemini-config', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            apiKey,
+            model: model || undefined,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Failed to configure Gemini: ' + (data.error || 'Unknown error'));
+          statusEl.textContent = 'Failed to configure Gemini.';
+          return;
+        }
+
+        statusEl.textContent =
+          'Connected to Gemini (' +
+          (data.model || 'unknown model') +
+          ', source: ' +
+          (data.source || 'manual') +
+          ').';
+
+        apiKeyInput.value = '';
+      } catch (e) {
+        console.error(e);
+        alert('Something went wrong while saving Gemini settings.');
+        statusEl.textContent = 'Error saving Gemini settings.';
+      }
+    }
+
     function setLoggedIn(token) {
       authToken = token;
       localStorage.setItem('meta_token', token);
       document.getElementById('loginSection').classList.add('hidden');
       document.getElementById('appSection').classList.remove('hidden');
+      loadGeminiStatus();
     }
 
     function setLoggedOut() {
@@ -246,6 +385,10 @@
       localStorage.removeItem('meta_token');
       document.getElementById('loginSection').classList.remove('hidden');
       document.getElementById('appSection').classList.add('hidden');
+      const statusEl = document.getElementById('geminiStatusText');
+      if (statusEl) {
+        statusEl.textContent = 'No AI Key – using local demo generator.';
+      }
     }
 
     function renderFileList() {
@@ -423,7 +566,7 @@
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + authToken,
+              ...getAuthHeaders(),
             },
             body: JSON.stringify(body),
           });
@@ -465,6 +608,12 @@
         a.click();
         URL.revokeObjectURL(url);
       });
+
+      // Gemini save button
+      const saveGeminiBtn = document.getElementById('saveGeminiBtn');
+      if (saveGeminiBtn) {
+        saveGeminiBtn.addEventListener('click', saveGeminiConfig);
+      }
     });
   </script>
 </body>
