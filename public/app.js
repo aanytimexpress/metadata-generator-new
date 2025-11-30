@@ -3,141 +3,14 @@
 const API_BASE = '';
 
 let authToken = null;
-let keywordFormat = 'single';
-let generatedItems = [];
 let chosenFiles = [];
-let lastEngine = 'local-demo';
-
-// ---- helper for auth headers ----
-function getAuthHeaders() {
-  return authToken ? { Authorization: 'Bearer ' + authToken } : {};
-}
-
-function updateEngineInfo(engine) {
-  lastEngine = engine || 'unknown';
-  const el = document.getElementById('engineInfo');
-  if (!el) return;
-
-  if (lastEngine === 'gemini') {
-    el.textContent = 'Engine: Gemini (AI model active)';
-  } else if (lastEngine === 'fallback-local') {
-    el.textContent = 'Engine: local fallback (Gemini error, using backup)';
-  } else if (lastEngine === 'local') {
-    el.textContent = 'Engine: local demo generator';
-  } else if (lastEngine === 'local-demo') {
-    el.textContent = 'Engine: local-demo';
-  } else {
-    el.textContent = 'Engine: ' + lastEngine;
-  }
-}
-
-// ---- Gemini status load ----
-async function loadGeminiStatus() {
-  const statusEl = document.getElementById('geminiStatusText');
-  if (!statusEl || !authToken) return;
-
-  statusEl.textContent = 'Checking Gemini status...';
-
-  try {
-    const res = await fetch(API_BASE + '/api/gemini-status', {
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-    });
-
-    if (!res.ok) {
-      statusEl.textContent = 'Not connected – using local demo generator.';
-      updateEngineInfo('local');
-      return;
-    }
-
-    const data = await res.json();
-    if (data.active) {
-      statusEl.textContent =
-        'Connected to Gemini (' +
-        (data.model || 'unknown model') +
-        ', source: ' +
-        (data.source || 'manual') +
-        ').';
-      updateEngineInfo('gemini');
-    } else {
-      statusEl.textContent =
-        'Not connected – using local demo generator.';
-      updateEngineInfo('local');
-    }
-  } catch (e) {
-    console.error(e);
-    statusEl.textContent = 'Error checking Gemini status.';
-    updateEngineInfo('local');
-  }
-}
-
-// ---- Gemini config save ----
-async function saveGeminiConfig() {
-  const apiKeyInput = document.getElementById('geminiApiKey');
-  const modelInput = document.getElementById('geminiModel');
-  const statusEl = document.getElementById('geminiStatusText');
-
-  const apiKey = apiKeyInput.value.trim();
-  const model = modelInput.value.trim();
-
-  if (!authToken) {
-    alert('Please login first.');
-    return;
-  }
-
-  if (!apiKey) {
-    alert('Please paste your Gemini API key.');
-    return;
-  }
-
-  statusEl.textContent = 'Saving Gemini settings...';
-
-  try {
-    const res = await fetch(API_BASE + '/api/gemini-config', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify({
-        apiKey,
-        model: model || undefined,
-      }),
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      alert('Failed to configure Gemini: ' + (data.error || 'Unknown error'));
-      statusEl.textContent = 'Failed to configure Gemini.';
-      updateEngineInfo('local');
-      return;
-    }
-
-    statusEl.textContent =
-      'Connected to Gemini (' +
-      (data.model || 'unknown model') +
-      ', source: ' +
-      (data.source || 'manual') +
-      ').';
-    updateEngineInfo('gemini');
-
-    apiKeyInput.value = '';
-  } catch (e) {
-    console.error(e);
-    alert('Something went wrong while saving Gemini settings.');
-    statusEl.textContent = 'Error saving Gemini settings.';
-    updateEngineInfo('local');
-  }
-}
+let generatedItems = [];
 
 function setLoggedIn(token) {
   authToken = token;
   localStorage.setItem('meta_token', token);
   document.getElementById('loginSection').classList.add('hidden');
   document.getElementById('appSection').classList.remove('hidden');
-  loadGeminiStatus();
 }
 
 function setLoggedOut() {
@@ -145,11 +18,6 @@ function setLoggedOut() {
   localStorage.removeItem('meta_token');
   document.getElementById('loginSection').classList.remove('hidden');
   document.getElementById('appSection').classList.add('hidden');
-  const statusEl = document.getElementById('geminiStatusText');
-  if (statusEl) {
-    statusEl.textContent = 'No AI Key – using local demo generator.';
-  }
-  updateEngineInfo('local-demo');
 }
 
 function renderFileList() {
@@ -157,10 +25,12 @@ function renderFileList() {
   const fileCountEl = document.getElementById('fileCount');
   fileCountEl.textContent = `(${chosenFiles.length})`;
   fileListEl.innerHTML = '';
+
   if (!chosenFiles.length) {
     fileListEl.textContent = 'No files uploaded yet';
     return;
   }
+
   chosenFiles.forEach(f => {
     const p = document.createElement('p');
     p.textContent = f.name;
@@ -171,13 +41,15 @@ function renderFileList() {
 function renderResults() {
   const resultList = document.getElementById('resultList');
   const resultCount = document.getElementById('resultCount');
+
   resultList.innerHTML = '';
+
   if (!generatedItems.length) {
-    resultList.innerHTML =
-      '<p class="text-slate-400">No metadata generated yet.</p>';
+    resultList.innerHTML = '<p class="text-slate-400">No metadata generated yet.</p>';
     resultCount.textContent = '0 items';
     return;
   }
+
   resultCount.textContent = generatedItems.length + ' items';
 
   generatedItems.forEach(item => {
@@ -187,9 +59,7 @@ function renderResults() {
       <p class="font-semibold text-[11px] text-slate-900">${item.filename}</p>
       <p class="text-[11px] mt-1"><span class="font-semibold">Title:</span> ${item.title}</p>
       <p class="text-[11px] mt-1"><span class="font-semibold">Description:</span> ${item.description}</p>
-      <p class="text-[11px] mt-1"><span class="font-semibold">Keywords:</span> ${item.keywords.join(
-        ', '
-      )}</p>
+      <p class="text-[11px] mt-1"><span class="font-semibold">Keywords:</span> ${item.keywords.join(', ')}</p>
     `;
     resultList.appendChild(div);
   });
@@ -207,6 +77,7 @@ window.addEventListener('load', () => {
   loginBtn.addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
+
     loginError.classList.add('hidden');
     loginError.textContent = '';
 
@@ -264,19 +135,6 @@ window.addEventListener('load', () => {
     descLenValue.textContent = descLenInput.value;
   });
 
-  // keyword format
-  const kfmtButtons = document.querySelectorAll('.kfmt-btn');
-  kfmtButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      kfmtButtons.forEach(b =>
-        b.classList.remove('bg-white', 'shadow', 'text-slate-800')
-      );
-      kfmtButtons.forEach(b => b.classList.add('text-slate-600'));
-      btn.classList.add('bg-white', 'shadow', 'text-slate-800');
-      keywordFormat = btn.dataset.kfmt;
-    });
-  });
-
   // file handling
   const fileInput = document.getElementById('fileInput');
   const chooseFilesBtn = document.getElementById('chooseFilesBtn');
@@ -287,6 +145,7 @@ window.addEventListener('load', () => {
     chosenFiles = Array.from(fileInput.files || []);
     renderFileList();
   });
+
   clearFilesBtn.addEventListener('click', () => {
     chosenFiles = [];
     fileInput.value = '';
@@ -307,83 +166,73 @@ window.addEventListener('load', () => {
       generateError.classList.remove('hidden');
       return;
     }
+
     if (!chosenFiles.length) {
       generateError.textContent = 'Please choose at least one image.';
       generateError.classList.remove('hidden');
       return;
     }
 
-    const filenames = chosenFiles.map(f => f.name);
-    const body = {
-      filenames,
-      titleLength: Number(titleLenInput.value),
-      descLength: Number(descLenInput.value),
-      keywordCount: Number(kwCountInput.value),
-      keywordFormat,
-      includeKeywords: document.getElementById('includeKeywords').value,
-      excludeKeywords: document.getElementById('excludeKeywords').value,
-      exportProfile: exportProfile.value,
-    };
+    const formData = new FormData();
+    chosenFiles.forEach(f => formData.append('files', f));
+
+    formData.append('titleLength', titleLenInput.value);
+    formData.append('descLength', descLenInput.value);
+    formData.append('keywordCount', kwCountInput.value);
+    formData.append('exportProfile', exportProfile.value);
 
     generateBtn.disabled = true;
     generateBtn.textContent = 'Generating...';
 
     try {
-      const res = await fetch(API_BASE + '/api/generate-metadata', {
+      const res = await fetch(API_BASE + '/api/generate-from-images', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
+          'Authorization': 'Bearer ' + authToken,
+          // Content-Type দেওয়া যাবে না, browser নিজে boundary সেট করবে
         },
-        body: JSON.stringify(body),
+        body: formData,
       });
+
       const data = await res.json();
       if (!res.ok) {
         generateError.textContent = data.error || 'Generation failed';
         generateError.classList.remove('hidden');
-        updateEngineInfo(data.ai || 'error');
         return;
       }
-      updateEngineInfo(data.ai || 'unknown');
+
       generatedItems = data.items || [];
       renderResults();
     } catch (e) {
       generateError.textContent = 'Network error: ' + e.message;
       generateError.classList.remove('hidden');
-      updateEngineInfo('error');
     } finally {
       generateBtn.disabled = false;
-      generateBtn.textContent = 'Generate Metadata';
+      generateBtn.textContent = 'Generate Metadata from Images';
     }
   });
 
-  // export csv
-  document
-    .getElementById('exportCsvBtn')
-    .addEventListener('click', () => {
-      if (!generatedItems.length) return;
-      let csv = 'filename,title,description,keywords\n';
-      generatedItems.forEach(item => {
-        const row = [
-          `"${item.filename.replace(/"/g, '""')}"`,
-          `"${item.title.replace(/"/g, '""')}"`,
-          `"${item.description.replace(/"/g, '""')}"`,
-          `"${item.keywords.join('; ').replace(/"/g, '""')}"`,
-        ].join(',');
-        csv += row + '\n';
-      });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'metadata_export.csv';
-      a.click();
-      URL.revokeObjectURL(url);
+  // export CSV
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    if (!generatedItems.length) return;
+
+    let csv = 'filename,title,description,keywords\n';
+    generatedItems.forEach(item => {
+      const row = [
+        `"${item.filename.replace(/"/g, '""')}"`,
+        `"${item.title.replace(/"/g, '""')}"`,
+        `"${item.description.replace(/"/g, '""')}"`,
+        `"${item.keywords.join('; ').replace(/"/g, '""')}"`,
+      ].join(',');
+      csv += row + '\n';
     });
 
-  // Gemini save button
-  const saveGeminiBtn = document.getElementById('saveGeminiBtn');
-  if (saveGeminiBtn) {
-    saveGeminiBtn.addEventListener('click', saveGeminiConfig);
-  }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'metadata_export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
 });
