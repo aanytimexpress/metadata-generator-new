@@ -97,7 +97,7 @@ app.get('/api/gemini-status', auth, (req, res) => {
   });
 });
 
-// manual config API
+// manual config API (UI থেকে key save করার জন্য)
 app.post('/api/gemini-config', auth, async (req, res) => {
   const { apiKey, model } = req.body || {};
 
@@ -111,8 +111,7 @@ app.post('/api/gemini-config', auth, async (req, res) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const modelInstance = genAI.getGenerativeModel({ model: modelName });
 
-    // simple test-call (optional – চাইলে skip করতে পারো)
-    // শুধু নিশ্চিত হওয়ার জন্য ১টা টেস্ট prompt
+    // simple টেস্ট, key ঠিক আছে কিনা দেখার জন্য
     await modelInstance.generateContent('test');
 
     manualGeminiConfig = { apiKey, model: modelName };
@@ -157,45 +156,52 @@ function generateLocalMetadata({
 
   const baseKeywords = [
     'stock photo',
-    'high quality',
-    'digital download',
     'royalty free',
+    'commercial use',
+    'digital download',
+    'high resolution',
+    'professional',
     'creative',
-    'background',
-    'texture',
-    'minimal',
-    'design',
-    'concept',
-    'modern',
-    'graphic',
-    'art',
   ];
 
-  return filenames.map((name, index) => {
+  const profileLabel =
+    exportProfile === 'adobe'
+      ? 'Adobe Stock'
+      : exportProfile === 'shutter'
+      ? 'Shutterstock'
+      : exportProfile === 'freepik'
+      ? 'Freepik'
+      : exportProfile === 'pond5'
+      ? 'Pond5'
+      : exportProfile === 'istock'
+      ? 'iStock'
+      : 'general stock sites';
+
+  return filenames.map((name) => {
     const baseName = name.replace(/\.[^.]+$/, '');
-    const profileLabel =
-      exportProfile === 'adobe'
-        ? 'Adobe Stock'
-        : exportProfile === 'shutter'
-        ? 'Shutterstock'
-        : exportProfile === 'freepik'
-        ? 'Freepik'
-        : exportProfile === 'pond5'
-        ? 'Pond5'
-        : exportProfile === 'istock'
-        ? 'iStock'
-        : 'general stock';
+
+    // includeKeywords কে scene / subject হিসেবে ধরলাম
+    const subject =
+      includeList.length > 0
+        ? includeList.join(', ')
+        : baseName.replace(/[_-]+/g, ' ');
 
     const title = (
-      `${baseName} – AI stock image for ${profileLabel} #${index + 1}`
+      `${subject} ${profileLabel} royalty free stock image`
     ).slice(0, titleLength);
 
     const description = (
-      `High quality stock photo titled "${baseName}". ` +
-      `Optimised for ${profileLabel} marketplace with SEO friendly, clean description and commercial safe wording.`
+      `Professional stock photo about ${subject}. ` +
+      `Optimised for ${profileLabel} with clean, commercial-safe wording and SEO friendly description.`
     ).slice(0, descLength);
 
-    let keywords = [...includeList, ...baseKeywords];
+    let keywords = [];
+
+    // includeKeywords আগে
+    keywords.push(...includeList);
+
+    // তারপর কিছু generic keyword add
+    keywords.push(...baseKeywords);
 
     if (keywordFormat === 'double') {
       keywords = keywords.map(k => k + ' background');
@@ -263,9 +269,14 @@ async function generateGeminiMetadata({
   const prompt = `
 You are a professional stock photo metadata generator for sites like Adobe Stock, Shutterstock, Freepik, Pond5 and iStock.
 
-The user is uploading files with these names and settings (JSON below):
+The user is uploading files with these names and settings (JSON):
 
 ${JSON.stringify(payload, null, 2)}
+
+Very important:
+- "includeKeywords" is NOT only for keywords. It also describes the SCENE / SUBJECT / STYLE of the images.
+- Use "includeKeywords" as the main description of what is in the images.
+- "excludeKeywords" are words you MUST NOT use anywhere.
 
 TASK:
 For EACH filename, generate:
@@ -273,17 +284,18 @@ For EACH filename, generate:
 - A clean DESCRIPTION (max ${descLength} characters).
 - An array of up to ${keywordCount} KEYWORDS (no more than ${keywordCount} items).
 
-Follow these rules carefully:
-1. Use the filename as a hint for subject, but do NOT repeat the raw ID (e.g. "142079516") in title or description.
-2. Optimise for ${profileLabel}.
-3. Keywords must be relevant, in English, separated as an array of strings.
-4. Avoid spam words like "best ever", "amazing", "click here".
-5. Respect "includeKeywords" by trying to include them when relevant.
-6. Never include any of the "excludeKeywords".
-7. Keep titles & descriptions suitable for commercial stock licensing and neutral (no trademark names).
+Rules:
+1. Base the title and description primarily on the scene described by "includeKeywords".
+2. Use natural, human-friendly phrasing that would perform well on ${profileLabel}.
+3. Do NOT repeat raw IDs from filenames (like "142079516") in the text.
+4. Keywords must be relevant, in English, and suitable for commercial stock marketplaces.
+5. Respect "includeKeywords" by including them (or close variants) when relevant.
+6. NEVER include any of the "excludeKeywords" in title, description or keyword list.
+7. Avoid hype / spam words like "best ever", "super amazing", "click here".
+8. Output must be neutral and safe for commercial licensing.
 
-RETURN FORMAT (very important):
-Return ONLY strict JSON, no markdown, no explanation:
+RETURN FORMAT (strict):
+Return ONLY valid JSON, no markdown, no explanation:
 
 [
   {
@@ -396,7 +408,7 @@ app.post('/api/generate-metadata', auth, async (req, res) => {
 const publicDir = path.join(__dirname, 'public');
 app.use(express.static(publicDir));
 
-// শুধু root path (/) সার্ভ করবে
+// শুধু root path সার্ভ হচ্ছে (Express v5-safe)
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
